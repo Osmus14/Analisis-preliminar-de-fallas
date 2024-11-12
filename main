@@ -1,0 +1,149 @@
+import tkinter as tk
+from tkinter import messagebox, StringVar
+import os
+from openpyxl import Workbook, load_workbook
+from primera_seccion import PrimerSeccion
+from segunda_seccion import SegundaSeccion
+from tercera_seccion import TerceraSeccion
+from cuarta_seccion import CuartaSeccion
+from quinta_seccion import QuintaSeccion
+from configuracion import GestorConfiguracion
+
+class ProgramaPrincipal:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Reporte Preliminar de Falla")
+        self.root.state('zoomed')  # Pantalla completa
+        self.gestor_config = GestorConfiguracion()
+        self.respuestas = {}
+        self.crear_menu_configuracion()
+        self.iniciar_primera_seccion()
+
+    def crear_menu_configuracion(self):
+        # Crear barra de menú
+        barra_menu = tk.Menu(self.root)
+        self.root.config(menu=barra_menu)
+        # Menú de configuración
+        menu_configuracion = tk.Menu(barra_menu, tearoff=0)
+        barra_menu.add_cascade(label="Configuración", menu=menu_configuracion)
+        menu_configuracion.add_command(label="Preferencias", command=self.abrir_configuracion)
+
+    def abrir_configuracion(self):
+        self.gestor_config.abrir_configuracion(self.root)
+
+    def iniciar_primera_seccion(self):
+        self.primera_seccion = PrimerSeccion(self.root, self.ir_segunda_seccion)
+        self.primera_seccion.mostrar()
+
+    def ir_segunda_seccion(self, respuesta_primera_seccion):
+        self.respuestas['primera_seccion'] = respuesta_primera_seccion
+        self.segunda_seccion = SegundaSeccion(self.root, self.ir_tercera_seccion)
+        self.segunda_seccion.mostrar()
+
+    def ir_tercera_seccion(self, respuestas_segunda_seccion):
+        self.respuestas['segunda_seccion'] = respuestas_segunda_seccion
+        self.tercera_seccion = TerceraSeccion(self.root, self.ir_cuarta_seccion)
+        self.tercera_seccion.mostrar()
+
+    def ir_cuarta_seccion(self, respuestas_tercera_seccion):
+        self.respuestas['tercera_seccion'] = respuestas_tercera_seccion
+        self.cuarta_seccion = CuartaSeccion(self.root, self.ir_quinta_seccion)
+        self.cuarta_seccion.mostrar()
+
+    def ir_quinta_seccion(self, respuestas_cuarta_seccion):
+        self.respuestas['cuarta_seccion'] = respuestas_cuarta_seccion
+        self.quinta_seccion = QuintaSeccion(self.root, self.finalizar_reporte)
+        self.quinta_seccion.mostrar()
+
+    def finalizar_reporte(self, respuestas_quinta_seccion):
+        # Guardar todas las respuestas
+        self.respuestas['quinta_seccion'] = respuestas_quinta_seccion
+        
+        # Crear carpeta para guardar reportes si no existe
+        if not os.path.exists('reportes'):
+            os.makedirs('reportes')
+        
+        # Nombre de archivo fijo para sobrescribir
+        nombre_archivo = 'reportes/reporte.xlsx'
+        
+        # Definir el orden específico de las preguntas
+        orden_preguntas = [
+            "Fecha del reporte",
+            "Nombre del evento",
+            "Tipo de evento",
+            "Fecha de inicio del evento",
+            "Fecha de final del evento",
+            "Duración del evento (horas)",
+            "Línea de negocios",
+            "Clasificación Personas",
+            "Definición del problema",
+            "Antecedentes",
+            "Alarmas presentadas",
+            "Acciones inmediatas efectuadas",
+            "Correcciones",
+            "Hallazgos preliminares"
+        ]
+        
+        # Verificar si el archivo ya existe
+        if os.path.exists(nombre_archivo):
+            wb = load_workbook(nombre_archivo)
+            ws = wb.active
+            # Encontrar la última fila ocupada
+            fila_actual = ws.max_row + 1  # La siguiente fila disponible
+        else:
+            # Crear un nuevo libro de Excel
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Reporte Consolidado"
+            
+            # Encabezados en la primera fila
+            ws.cell(row=1, column=1, value="N° Reporte")  # Columna para el número de reporte
+            for col, pregunta in enumerate(orden_preguntas, start=2):
+                ws.cell(row=1, column=col, value=pregunta)  # Preguntas como encabezados
+            
+            fila_actual = 2  # Comenzar en la segunda fila para el primer reporte
+        
+        # Llenar las respuestas en la fila actual
+        ws.cell(row=fila_actual, column=1, value=fila_actual - 1)  # Número de reporte en la primera columna
+        col_actual = 2  # Reiniciar columna para cada pregunta
+        
+        for pregunta in orden_preguntas:
+            respuesta = "No respondido"  # Valor por defecto
+            
+            # Buscar la respuesta en las secciones
+            for seccion in self.respuestas.keys():
+                if pregunta in self.respuestas[seccion]:
+                    respuesta = self.respuestas[seccion][pregunta]
+                    
+                    # Si la respuesta es un StringVar, obtener su valor
+                    if isinstance(respuesta, StringVar):
+                        respuesta = respuesta.get()  
+                    
+                    break  # Salir del bucle si encontramos la respuesta
+            
+            ws.cell(row=fila_actual, column=col_actual, value=str(respuesta))
+            col_actual += 1  # Mover a la siguiente columna
+
+        # Ajustar el ancho de las columnas según el contenido
+        for column in ws.columns:
+            max_length = 0
+            column = [cell for cell in column]
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)  # Añadir un poco de margen
+            ws.column_dimensions[column[0].column_letter].width = adjusted_width
+        
+        # Guardar el archivo, sobrescribiendo el existente
+        wb.save(nombre_archivo)
+        messagebox.showinfo("Éxito", f"Reporte guardado como {nombre_archivo}")
+
+    def ejecutar(self):
+        self.root.mainloop()
+
+if __name__ == "__main__":
+    app = ProgramaPrincipal()
+    app.ejecutar()
